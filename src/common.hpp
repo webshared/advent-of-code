@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <functional>
 #include <numeric>
+#include <chrono>
 #include <boost/regex.hpp>
 
 using namespace std;
@@ -109,5 +110,18 @@ std::vector<int> splitToInts(const std::string &s, char delim) {
     }
     return elems;
 }
+
+class Timer {
+    std::chrono::_V2::steady_clock::time_point start;
+    // std::chrono::time_point<std::chrono::system_clock> start;
+    public:
+    Timer() {
+        this->start = std::chrono::steady_clock::now();
+    }
+    void log() {
+        auto end = std::chrono::steady_clock::now();
+        std::cout << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " µs" << std::endl;
+    }
+};
 
 #endif

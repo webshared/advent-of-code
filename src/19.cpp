@@ -1,84 +1,152 @@
-#include <chrono>
 #include "common.hpp"
 
-class Timer {
-    std::chrono::_V2::steady_clock::time_point start;
-    // std::chrono::time_point<std::chrono::system_clock> start;
-    public:
-    Timer() {
-        this->start = std::chrono::steady_clock::now();
-    }
-    void log() {
-        auto end = std::chrono::steady_clock::now();
-        std::cout << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " µs" << std::endl;
-    }
-};
+typedef vector<int> vec3d; // 3x1
+typedef vector<vector<int>> rotMx; // 3x3
+typedef vector<vector<int>> vecs3d; // 3xN
+
+const int minMatches = 12;
+
+ostream& operator <<(ostream &out, vec3d &vec) {
+    return out << "[" << vec[0] << "," << vec[1] << "," << vec[2] << "]";
+}
+
+ostream& operator <<(ostream &out, vecs3d &m) {
+    for (int i = 0; i < m.size(); i++)
+        out << m[i];
+    return out;
+}
 
 // generate 24 orientation matrices
-vector<vector<vector<int>>> rotationMatrices() {
-    vector<vector<vector<int>>> matrices;
+// which are permutations of 3x3 matrices of -1, 0, and 1s where determinant equals 1
+vector<rotMx> rotationMatrices() {
+    vector<rotMx> matrices;
     int c = 0;
     for (int x = 0; x < 6; ++x)
         for (int y = 0; y < 6; ++y)
-            for (int z = 0; z < 6; ++z)
-                if (x / 2 != y / 2 && y / 2 != z / 2 && x / 2 != z / 2) {
-                    vector<vector<int>> m(3);
-                    m[0].assign(3, 0);
-                    m[1].assign(3, 0);
-                    m[2].assign(3, 0);
-                    m[0][x / 2] = x % 2 ? -1 : 1;
-                    m[1][y / 2] = y % 2 ? -1 : 1;
-                    m[2][z / 2] = z % 2 ? -1 : 1;
-                    int det = m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
-                        - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
-                        + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
-                    if (det > 0) matrices.push_back(m);
-                }
+            for (int z = 0; z < 6; ++z) {
+                vector<vector<int>> m(3);
+                m[0].assign(3, 0);
+                m[1].assign(3, 0);
+                m[2].assign(3, 0);
+                m[0][x / 2] = x % 2 ? -1 : 1;
+                m[1][y / 2] = y % 2 ? -1 : 1;
+                m[2][z / 2] = z % 2 ? -1 : 1;
+                // determinant equals 1 for rotations
+                int det = m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
+                    - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
+                    + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+                if (det == 1) matrices.push_back(m);
+            }
     return matrices;
 }
 
-vector<int> mmult(const vector<vector<int>> &rot, const vector<int> &coord) {
-    vector<int> res(3);
+vec3d mmult(const rotMx &rot, const vec3d &coord) {
+    vec3d res(3);
     for (int i = 0; i < 3; i++)
         res[i] = rot[i][0] * coord[0] + rot[i][1] * coord[1] + rot[i][2] * coord[2];
     return res;
 }
 
-vector<vector<int>> mmult2(const vector<vector<int>> &rot, const vector<vector<int>> &coords) {
-    vector<vector<int>> res(coords.size());
+vecs3d mmult2(const rotMx &rot, const vecs3d &coords) {
+    vecs3d res(coords.size());
     for (int idx = 0; idx < coords.size(); ++idx) {
         res[idx] = mmult(rot, coords[idx]);
     }
     return res;
 }
 
-vector<int> mdiff(const vector<int> &a, const vector<int> &b) {
-    vector<int> diff(3);
+rotMx mmult3d(const rotMx &mA, const rotMx &mB) {
+    rotMx res(3);
+    for (int i = 0; i < 3; i++) {
+        res[i] = vec3d(3, 0);
+        for (int j = 0; j < 3; j++) 
+            for (int k = 0; k < 3; k++)
+               res[i][j] += mA[i][k] * mB[k][j];
+    }
+    return res;
+}
+
+// Inverse rotation matrix is just a transpose for 90 degree rotations
+rotMx minv(const rotMx &rot) {
+    rotMx res(3);
+    for (int i = 0; i < 3; i++)
+        res[i] = vector(3, 0);
+    for (int i = 0; i < 3; i++)
+        for (int j = 0; j < 3; j++)
+            res[j][i] = rot[i][j];
+    return res;
+}
+
+vec3d madd(const vec3d &a, const vec3d &b) {
+    vec3d diff(3);
+    for (int i: range(0, 3))
+        diff[i] = a[i] + b[i];
+    return diff;
+}
+
+vec3d mdiff(const vec3d &a, const vec3d &b) {
+    vec3d diff(3);
     for (int i: range(0, 3))
         diff[i] = a[i] - b[i];
     return diff;
 }
 
-bool meq(const vector<int> &a, const vector<int> &b) {
+bool meq(const vec3d &a, const vec3d &b) {
     return a[0] == b[0] && a[1] == b[1] && a[2] == b[2];
 }
 
-void vlog(const vector<int> &v) {
-    cout << "size=" << v.size() << " ";
-    for (int val: v) cout << val << ",";
-    cout << endl;
-}
-
-bool cmpCoords(const vector<int> &a, const vector<int> &b) {
+bool cmpCoords(const vec3d &a, const vec3d &b) {
     if (a[0] == b[0] && a[1] == b[1]) return a[2] < b[2];
     if (a[0] == b[0]) return a[1] < b[1];
     return a[0] < b[0];
 }
- 
-int f19(const vector<string> &input) {
+
+int numberOfDups(vecs3d &vecs) {
+    sort(vecs.begin(), vecs.end(), cmpCoords);
+    int dups = 0;
+    for (int idx = 1; idx < vecs.size(); ++idx) {
+        if (meq(vecs[idx - 1], vecs[idx])) {
+            ++dups;
+        }
+    }
+    return dups;
+}
+
+// Returns scanner B position in A's coordinate system if 12+ intersections found
+optional<vec3d> findIntersection(
+    const vecs3d &setA,
+    const vecs3d &setB,
+    const optional<reference_wrapper<rotMx>> rotAMx = std::nullopt,
+    const optional<reference_wrapper<rotMx>> rotBMx = std::nullopt
+) {
+    vecs3d aCoords;
+    aCoords = rotAMx ? mmult2(*rotAMx, setA) : setA;
+    sort(aCoords.begin(), aCoords.end(), cmpCoords);
+    vecs3d bCoords;
+    bCoords = rotBMx ? mmult2(*rotBMx, setB) : setB;
+    sort(bCoords.begin(), bCoords.end(), cmpCoords);
+    for (int i = 0; i < aCoords.size(); ++i) {
+        const vec3d &shiftA = aCoords[i];
+        for (int j = 0; j < bCoords.size(); ++j) {
+            const vec3d &shiftB = bCoords[j];
+            vecs3d allShifted;
+            for (vec3d vec: aCoords)
+                allShifted.push_back(mdiff(vec, shiftA));
+            for (vec3d vec: bCoords)
+                allShifted.push_back(mdiff(vec, shiftB));
+            int matches = numberOfDups(allShifted);
+            if (matches >= minMatches) {
+                return make_optional(mdiff(shiftA, shiftB));
+            }
+        }
+    }
+    return std::nullopt;
+} 
+
+pair<int, int> f19(const vector<string> &input) {
     const int minMatches = 12;
-    vector<vector<vector<int>>> scanners;
-    vector<vector<vector<int>>> matrices = rotationMatrices();
+    vector<vecs3d> scanners;
+    vector<rotMx> matrices = rotationMatrices();
 
     // parse input
     int sIndex = -1;
@@ -94,107 +162,98 @@ int f19(const vector<string> &input) {
         }
     }
 
-    int dups = 0;
-    map<int, int> rotationIndices; // scannerId -> index in matrices if the scanner orientation is determined
-    map<int, pair<int, vector<int>>> rotAndPos; // pair<rotationIndex, 3 coords of scanner position>
-    rotAndPos.insert(pair{0, pair<int, vector<int>>{0, vector<int>{0, 0, 0}}});
-
+    // here we have a scanners graf where edges are transitions of coordinate systems: pair<rotMx, vec3d>
+    // build the adjacency matrix
+    vector<vector<optional<pair<rotMx, vec3d>>>> adj(scanners.size());
+    for (int i = 0; i < scanners.size(); ++i)
+        adj[i] = vector<optional<pair<rotMx, vec3d>>>(scanners.size(), std::nullopt);
     for (int i = 0; i < scanners.size(); ++i) {
-        vector<vector<int>> iCoords(scanners[i].size());
-        if (rotationIndices.count(i)) {
-            iCoords = mmult2(matrices[rotationIndices[i]], scanners[i]);
-        } else {
-            iCoords.assign(scanners[i].begin(), scanners[i].end());
-        }
-        sort(iCoords.begin(), iCoords.end(), cmpCoords);
+        adj[i][i] = make_optional(pair{matrices[0], vec3d{0, 0, 0}});
         for (int j = i + 1; j < scanners.size(); ++j) {
-            // try to match scanners i and j
-            cout << "Compare " << i << " vs. " << j << endl;
-            vector<int> rotationMxIdxs;
-            if (rotationIndices.count(j)) {
-                cout << "rotation of " << j << " = " << rotationIndices[j] << endl;
-                rotationMxIdxs.push_back(rotationIndices[j]);
-            } else {
-                cout << "rotation of " << j << " not determined\n";
-                rotationMxIdxs = range(0, matrices.size());
-            }
-            for (int rotationMxIdx: rotationMxIdxs) {
-                //cout << "M" << rotationMxIdx << endl;
-                //Timer t;
-                queue<vector<pair<int, int>>> q;
-                for (int ii = 0; ii < iCoords.size(); ++ii)
-                    for (int jj = 0; jj < scanners[j].size(); ++jj)
-                        q.push(vector{pair{ii, jj}});
-                bool found = false;
-                vector<pair<int, int>> sequence;
-                int hits = 0, iters = 0;
-                while (q.size()) {
-                    ++hits;
-                    auto seq = q.front();
-                    auto [beaconA, beaconB] = seq[seq.size() - 1];
-                    set<int> usedBs;
-                    for (auto &item: seq) usedBs.insert(item.second);
-                    q.pop();
-                    bool added = false;
-                    int minToAdd = 0; // max(0, minMatches - (int)seq.size() - 1);
-                    for (int ii = beaconA + 1; ii < iCoords.size() - minToAdd; ++ii) {
-                        vector<int> dA = mdiff(iCoords[ii], iCoords[beaconA]);
-                        for (int jj = beaconB + 1; jj < scanners[j].size(); ++jj) {
-                            ++iters;
-                            if (usedBs.count(jj) == 0) {
-                                vector<int> dB = mdiff(jCoords[jj], jCoords[beaconB]);
-                                if (meq(dA, dB)) {
-                                    vector<pair<int, int>> newSeq;
-                                    newSeq.assign(seq.begin(), seq.end());
-                                    newSeq.push_back(pair{ii, jj});
-                                    q.push(newSeq);
-                                    added = true;
-                                    if (newSeq.size() > 107) {
-                                          cout << "size=" << newSeq.size() << endl;
-                                          for (auto i: newSeq) {
-                                              cout << "[" << i.first << " : " << i.second<< "] "; 
-                                          }
-                                          cout << "queue=" << q.size() << endl;
-                                    }
-                                    break;
-                                }
-                            }
-                        }
-                        if (added) break;
-                    }
-                    if (!added && seq.size() >= 12) {
-                        // scanners i and j cover the same area
-                        cout << " -- intersection found, orientation=" << rotationMxIdx << " points=" << seq.size() << endl;
-                        dups += seq.size();
-                        found = true;
-                        for (auto i: seq) {
-                            cout << "[" << i.first << " : " << i.second<< "] "; 
-                        }
-                        cout << endl;
-                        sequence = seq;
-                        rotationIndices.insert(pair{j, rotationMxIdx});
-                        
-                        vector<int> jScannerPos = mdiff(iCoords[seq[0].first], jCoords[seq[0].second]);
-                        rotAndPos.insert(pair{j, pair{rotationMxIdx, jScannerPos}});
-                        cout << "rotationMxIdx=" << rotationMxIdx << endl;
-                        vlog(jScannerPos);
-                        break;
-                    }
+            cout << "CMP " << i << " vs " << j << endl;
+            for (int rot = 0; rot < matrices.size(); ++rot) {
+                auto coordOfB = findIntersection(
+                    scanners[i],
+                    scanners[j],
+                    std::nullopt,
+                    matrices[rot]
+                );
+                if (coordOfB) {
+                    cout << "match rotIdx=" << rot << " coord=" << *coordOfB << " rotation=" << matrices[rot] << endl;
+                    // scanner j positoin from i's viewpoint
+                    adj[i][j] = make_optional(pair{matrices[rot], *coordOfB});
+                    // scanner i positoin from j
+                    rotMx rotInv = minv(matrices[rot]);
+                    adj[j][i] = make_optional(pair{rotInv, mmult(rotInv, mdiff(vec3d{0, 0, 0}, *coordOfB))});
                 }
-                //cout << "hits=" << hits << " iters=" << iters << " ratio=" << (iters / (hits + 1)) << endl;
-                //t.log();
-                if (found) break;
             }
         }
     }
+
+    // print an overview of adjacency matrix
     for (int i = 0; i < scanners.size(); ++i) {
-        cout << "scanner " << i << " rot=" << (rotationIndices.count(i) ? to_string(rotationIndices[i]) : "not defined") << endl;
+        for (int j = 0; j < scanners.size(); ++j)
+            cout << (adj[i][j] ? "#" : "-");
+        cout << endl;
     }
-    cout << "scannedBeacons=" << scannedBeacons << " dups=" << dups << endl;
-    return scannedBeacons - dups;
+
+    // now build the reachability matrix to find how all scanners are translated into 0's coordinates
+    vector<vector<optional<pair<rotMx, vec3d>>>> dst(adj.begin(), adj.end());
+    for (int k = 0; k < scanners.size(); ++k) {
+        for (int i = 0; i < scanners.size(); ++i) {
+            for (int j = 0; j < scanners.size(); ++j) {
+                if (!dst[i][j] && dst[i][k] && dst[k][j]) {
+                    // there is no edge i->j, but there is i->k, k->j
+                    // recall some linear algebra to calculate transition matrices
+                    rotMx mA = dst[i][k]->first;
+                    rotMx mB = dst[k][j]->first;
+                    vec3d a = dst[i][k]->second;
+                    vec3d b = dst[k][j]->second;
+                    dst[i][j] = make_optional(pair{
+                        mmult3d(mA, mB),
+                        madd(a, mmult(mA, b))
+                    });
+                }
+            }
+        }
+    }
+
+    auto convertCoords = [&dst, &scanners] (int from, int to, const vecs3d &vecs, vecs3d &converted) -> vecs3d {
+        rotMx &rot = dst[from][to]->first;
+        vec3d &origin = dst[from][to]->second;
+        for (auto v: vecs) {
+            vec3d v0 = madd(origin, mmult(rot, v));
+            converted.push_back(v0);
+        }
+        return converted;
+    };
+
+    // an easy part:
+    // convert all points into scanner 0 cooridate system and find number of dups
+    vecs3d allPoints;
+    for (int i = 0; i < scanners.size(); ++i)
+        convertCoords(0, i, scanners[i], allPoints);
+    int dups = numberOfDups(allPoints);
+    int uniques = allPoints.size() - dups;
+    cout << "\nALL POINTS\n" << allPoints << endl;
+
+    // cancluate max. distance between scanners
+    int maxDist = 0;
+    for (int i = 0; i < scanners.size(); ++i) {
+        for (int j = 0; j < scanners.size(); ++j) {
+            vec3d diff = mdiff(dst[0][i]->second, dst[0][j]->second);
+            int d = abs(diff[0]) + abs(diff[1]) + abs(diff[2]);
+            if (maxDist < d)
+                maxDist = d;
+        }
+    }
+
+    return pair<int, int>{uniques, maxDist};
 }
 
 int main() {
-    cout << "19\t" << f19(getContent("./src/input-19.txt")) << endl;
+    auto res = f19(getContent("./input/input-19.txt"));
+    cout << "19\t" << res.first << endl;
+    cout << "19a\t" << res.second << endl;
     return 0;
 }
