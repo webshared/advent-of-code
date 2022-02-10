@@ -6,10 +6,12 @@ typedef vector<vector<int>> vecs3d; // 3xN
 
 const int minMatches = 12;
 
+// debug output helper
 ostream& operator <<(ostream &out, vec3d &vec) {
     return out << "[" << vec[0] << "," << vec[1] << "," << vec[2] << "]";
 }
 
+// debug output helper
 ostream& operator <<(ostream &out, vecs3d &m) {
     for (int i = 0; i < m.size(); i++)
         out << m[i];
@@ -144,7 +146,6 @@ optional<vec3d> findIntersection(
 } 
 
 pair<int, int> f19(const vector<string> &input) {
-    const int minMatches = 12;
     vector<vecs3d> scanners;
     vector<rotMx> matrices = rotationMatrices();
 
