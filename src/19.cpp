@@ -114,6 +114,42 @@ int numberOfDups(vecs3d &vecs) {
     return dups;
 }
 
+int numberOfIntDups(vector<int> &vecs) {
+    sort(vecs.begin(), vecs.end());
+    int dups = 0;
+    for (int idx = 1; idx < vecs.size(); ++idx)
+        if (vecs[idx - 1] == vecs[idx])
+            ++dups;
+    return dups;
+}
+
+int areSetsSiminar(
+    vecs3d &setA,
+    vecs3d &setB
+) {
+    auto dists = [] (vecs3d &coords, vector<int> &ds) {
+        for (int i = 0; i < coords.size(); ++i)
+            for (int j = 0; j < coords.size(); ++j)
+                if (i != j) {
+                    auto vec = mdiff(coords[i], coords[j]);
+                    ds.push_back(vec[0] * vec[0] + vec[1] * vec[1] + vec[2] * vec[2]);
+                }
+    };
+    vector<int> distsA;
+    vector<int> distsB;
+    dists(setA, distsA);
+    dists(setB, distsB);
+
+    vector<int> distsAB(distsA);
+    for (auto v: distsB) distsAB.push_back(v);
+
+    int dA = numberOfIntDups(distsA);
+    int dB = numberOfIntDups(distsB);
+    int d = numberOfIntDups(distsAB);
+    // cout << "DA " << dA << " DB " << dB << " d " << d << endl;
+    return d - dA - dB;
+} 
+
 // Returns scanner B position in A's coordinate system if 12+ intersections found
 optional<vec3d> findIntersection(
     const vecs3d &setA,
@@ -171,21 +207,22 @@ pair<int, int> f19(const vector<string> &input) {
     for (int i = 0; i < scanners.size(); ++i) {
         adj[i][i] = make_optional(pair{matrices[0], vec3d{0, 0, 0}});
         for (int j = i + 1; j < scanners.size(); ++j) {
-            cout << "CMP " << i << " vs " << j << endl;
-            for (int rot = 0; rot < matrices.size(); ++rot) {
-                auto coordOfB = findIntersection(
-                    scanners[i],
-                    scanners[j],
-                    std::nullopt,
-                    matrices[rot]
-                );
-                if (coordOfB) {
-                    cout << "match rotIdx=" << rot << " coord=" << *coordOfB << " rotation=" << matrices[rot] << endl;
-                    // scanner j positoin from i's viewpoint
-                    adj[i][j] = make_optional(pair{matrices[rot], *coordOfB});
-                    // scanner i positoin from j
-                    rotMx rotInv = minv(matrices[rot]);
-                    adj[j][i] = make_optional(pair{rotInv, mmult(rotInv, mdiff(vec3d{0, 0, 0}, *coordOfB))});
+            if (areSetsSiminar(scanners[i], scanners[j]) >= 66) {
+                for (int rot = 0; rot < matrices.size(); ++rot) {
+                    auto coordOfB = findIntersection(
+                        scanners[i],
+                        scanners[j],
+                        std::nullopt,
+                        matrices[rot]
+                    );
+                    if (coordOfB) {
+                        cout << "match " << i << " vs " << j << "\trotIdx=" << rot << " coord=" << *coordOfB << " rotation=" << matrices[rot] << endl;
+                        // scanner j positoin from i's viewpoint
+                        adj[i][j] = make_optional(pair{matrices[rot], *coordOfB});
+                        // scanner i positoin from j
+                        rotMx rotInv = minv(matrices[rot]);
+                        adj[j][i] = make_optional(pair{rotInv, mmult(rotInv, mdiff(vec3d{0, 0, 0}, *coordOfB))});
+                    }
                 }
             }
         }
@@ -236,7 +273,7 @@ pair<int, int> f19(const vector<string> &input) {
         convertCoords(0, i, scanners[i], allPoints);
     int dups = numberOfDups(allPoints);
     int uniques = allPoints.size() - dups;
-    cout << "\nALL POINTS\n" << allPoints << endl;
+    // cout << "\nALL POINTS\n" << allPoints << endl;
 
     // cancluate max. distance between scanners
     int maxDist = 0;
@@ -253,8 +290,12 @@ pair<int, int> f19(const vector<string> &input) {
 }
 
 int main() {
+    Timer t;
     auto res = f19(getContent("./input/input-19.txt"));
+    t.log();
     cout << "19\t" << res.first << endl;
     cout << "19a\t" << res.second << endl;
+    assert(res.first == 445);
+    assert(res.second == 13225);
     return 0;
 }

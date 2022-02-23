@@ -48,7 +48,7 @@ vector<int> range(int from, int to, bool inclusive = false) {
       }
     } else {
       int toI = inclusive ? to : to + 1;
-      for (int i = from; i >= to; --i) {
+      for (int i = from; i >= toI; --i) {
           vec.push_back(i);
       }
     }
